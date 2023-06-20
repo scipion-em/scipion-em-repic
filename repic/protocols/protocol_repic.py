@@ -30,17 +30,23 @@
 Describe your python module here:
 This module will provide the traditional Hello world example
 """
+import os
+
 from pyworkflow.protocol import Protocol, params, Integer
+from pwem.protocols import ProtParticlePicking
 from pyworkflow.utils import Message
-from pwem.objects import SetOfCoordinates
+from pwem.objects import SetOfCoordinates, Coordinate
+from pyworkflow.utils import getFiles, removeBaseExt, moveFile
+from repic import Plugin
 
 
-class ProtRepic(Protocol):
+class ProtRepic(ProtParticlePicking):
     """
-    This protocol will print hello world in the console
-    IMPORTANT: Classes names should be unique, better prefix them
+    This protocol....
     """
     _label = 'repic picking'
+    micList = []
+    pickedParticles = 0
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -55,36 +61,127 @@ class ProtRepic(Protocol):
                       label="Input coordinates", important=True,
                       help='Select the set of coordinates to compare')
 
+        form.addParam('boxsize', params.IntParam, default=100,
+                      label="Box size",
+                      help='Particle box size')
+
+        form.addParam('numParticles', params.IntParam, default=150,
+                      expertLevel=params.LEVEL_ADVANCED,
+                      label="Expected number of particles per micrograph",
+                      help='Expected number of particles per micrograph')
+
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
+        self.checkedMics = set()  # those mics ready to be processed (micId)
+        self.processedMics = set()  # those mics already processed (micId)
+        self.sampligRates = []
+
         # Insert processing steps
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.getClicquesStep)
+        self._insertFunctionStep(self.getOptimalClicquesStep)
         self._insertFunctionStep(self.createOutputStep)
 
     def convertInputStep(self):
-        pass
+        mics = self.getAllCoordsInputMicrographs()
+        for micFn in mics:
+            coordsInMic, mic = [], mics[micFn]
+            self.micList.append(micFn)
+            pickerNum = 0
+            for coordSet in self.inputCoordinates:
+                folderName = 'picker_%i' % pickerNum
+                dirName = self._getExtraPath(folderName)
+                if not os.path.exists(dirName):
+                    os.mkdir(dirName)
+                fn = os.path.join(dirName, micFn + '.box')
+                with open(fn, 'w') as f:
+                    for coord in coordSet.get().iterCoordinates(mic):
+                        line = '%i %i %i %i 1 ' % (coord.getX(), coord.getY(), self.boxsize.get(), self.boxsize.get())
+                        f.write(line + '\n')
+
+                        coordsInMic.append(coord)
+                    f.close()
+                    pickerNum = pickerNum + 1
 
     def getClicquesStep(self):
-        run = 'repic get_cliques[-h][--multi_out][--get_cc] in_dir out_dir box_size'
-        pass
+        outCoords = self._getExtraPath('output')
+        os.mkdir(outCoords)
+        boxsize = self.boxsize.get()
+        args = ' %s %s %i ' % (self._getExtraPath(), outCoords, boxsize)
+        Plugin.runRepic(self, 'get_cliques.py', args)
+
+    def getOptimalClicquesStep(self):
+        outputOfCliques = self._getExtraPath('output')
+        args = ' --num_particles %i %s %i' % (self.numParticles.get(), outputOfCliques, self.boxsize.get())
+        Plugin.runRepic(self, 'run_ilp.py', args)
 
     def createOutputStep(self):
-        # register how many times the message has been printed
-        # Now count will be an accumulated value
-        timesPrinted = Integer(self.times.get() + self.previousCount.get())
-        self._defineOutputs(count=timesPrinted)
+        #inputcoords = self.inputCoordinates.get()
+        print(self.inputCoordinates.get())
 
-    def coordToFolders(self):
-        for coordSet in self.inputCoordinates:
-            currentPickMics, isSetClosed = getReadyMics(coordSet.get())
-            streamClosed.append(isSetClosed)
-            if not readyMics:  # first time
-                readyMics = currentPickMics
-            else:  # available mics are those ready for all pickers
-                readyMics.intersection_update(currentPickMics)
-            allMics = allMics.union(currentPickMics)
+        self.outputSet = SetOfCoordinates()
+
+        micNumber = 0
+        Xcoords = []
+        Ycoords = []
+        miccoords = []
+        for mic in self.micList:
+            fn = os.path.join(self._getExtraPath('output'), mic+'.box')
+            f = open(fn, "r")
+            lines = f.readlines()
+            for line in lines:
+                Xcoords.append(int(line[0]))
+                Ycoords.append(int(line[1]))
+                miccoords.append(micNumber)
+
+            micNumber = micNumber + 1
+
+        coord = Coordinate()
+        for idx in range(0, len(Xcoords)):
+            coord.setMicrograph(self.micList[micNumber[idx]])
+            coord.setX(Xcoords[idx])
+            coord.setY(Ycoords[idx])
+            self.outputSet.append(coord)
+
+        self._defineOutputs(outputCoordinates=self.outputSet)
+        for inset in self.inputCoordinates:
+            self._defineSourceRelation(inset.get(), self.outputSet)
+
+
+
+
+
+    def getAllCoordsInputMicrographs(self):
+      '''Returns a dic {micFn: mic} with the input micrographs present associated with all the input coordinates sets.
+      If shared, the list contains only those micrographs present in all input coordinates sets, else the list contains
+      all microgrpah present in any set (Intersection vs Union)
+      Do not create a set, because of concurrency in the database'''
+      micDict, micFns = {}, set([])
+      for inputCoord in self.inputCoordinates:
+        newMics = inputCoord.get().getMicrographs()
+        newMicFns = []
+        for mic in newMics:
+          micFn = self.prunePaths([mic.getFileName()])[0]
+          micDict[micFn] = mic.clone()
+          newMicFns.append(micFn)
+
+        if micFns == set([]):
+          micFns = micFns | set(newMicFns)
+        else:
+          micFns = micFns & set(newMicFns)
+
+      sharedMicDict = {}
+      for micFn in micFns:
+        sharedMicDict[micFn] = micDict[micFn]
+
+      return sharedMicDict
+
+    def prunePaths(self, paths):
+      fns = []
+      for path in paths:
+        fns.append(path.split('/')[-1])
+      return fns
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -92,7 +189,7 @@ class ProtRepic(Protocol):
         summary = []
 
         if self.isFinished():
-            summary.append("This protocol has printed *%s* %i times." % (self.message, self.times))
+            summary.append("REPIC protocol has found *%i* particles." % (self.pickedParticles))
         return summary
 
     def _methods(self):
@@ -105,3 +202,9 @@ class ProtRepic(Protocol):
                                " In total, %s messages has been printed."
                                % (self.previousCount, self.count))
         return methods
+
+'''
+class repicNumParticles(Wizard):
+    _targets = [(ProtRepic, ['numParticles'])]
+    def show(self, form):
+'''

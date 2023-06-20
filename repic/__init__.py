@@ -24,15 +24,18 @@
 # *
 # **************************************************************************
 
-import pwem
 import os
-from pyworkflow.utils import Environ
-from .constants import REPIC_HOME, VERSION, REPIC, REPIC_ENV_NAME, \
-    DEFAULT_ACTIVATION_CMD
 
+import pwem
+from pyworkflow import Config
+from pyworkflow.utils import Environ
+from scipion.constants import PYTHON
+
+from .constants import *
+
+__version__ = '0'
 _logo = "icon.png"
 _references = ['cameron2023']
-__version__ = "0"
 
 
 class Plugin(pwem.Plugin):
@@ -43,8 +46,9 @@ class Plugin(pwem.Plugin):
     @classmethod
     def _defineVariables(cls):
         # repic does NOT need EmVar because it uses a conda environment.
-        cls._defineVar(REPIC, DEFAULT_ACTIVATION_CMD)
-        cls._defineEmVar(REPIC, 'repic-' + VERSION)
+        cls._defineEmVar(REPIC_HOME, 'repic-0')
+        cls._defineVar(REPIC_ENV_ACTIVATION, DEFAULT_ACTIVATION_CMD)
+
 
     @classmethod
     def getRepicEnvActivation(cls):
@@ -57,7 +61,8 @@ class Plugin(pwem.Plugin):
         if 'PYTHONPATH' in environ:
             # this is required for python virtual env to work
             del environ['PYTHONPATH']
-
+        environ.update({'PYTHONPATH': cls.getHome("REPIC")},
+                       position=Environ.BEGIN)
         return environ
 
     @classmethod
@@ -69,10 +74,11 @@ class Plugin(pwem.Plugin):
 
         # Create the environment
         installationCmd += ' git clone https://github.com/ccameron/REPIC && '
-        installationCmd += 'conda create -n %s -c bioconda -c gurobi %s gurobi ' % (REPIC, REPIC)
+        installationCmd += 'conda create -n %s -c bioconda python=3.8 networkx matplotlib scipy -y && ' % REPIC_ENV_NAME
 
         # Activate new the environment
-        installationCmd += 'conda activate %s && ' % REPIC_ENV_NAME
+        installationCmd += 'conda activate %s && ' % REPIC
+        installationCmd += 'chmod -R + %s && ' % cls.getHome()
 
         installationCmd += 'touch %s' % REPIC_INSTALLED
 
@@ -90,6 +96,12 @@ class Plugin(pwem.Plugin):
                        default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
+    def getActivationCmd(cls):
+        """ Return the activation command. """
+        return '%s %s' % (cls.getCondaActivationCmd(),
+                          cls.getRepicEnvActivation())
+
+    @classmethod
     def getDependencies(cls):
         # try to get CONDA activation command
         condaActivationCmd = cls.getCondaActivationCmd()
@@ -100,12 +112,11 @@ class Plugin(pwem.Plugin):
         return neededProgs
 
     @classmethod
-    def activatingRepic(cls):
-        return 'conda activate %s ' % REPIC_ENV_NAME
-
-    @classmethod
-    def runRepic(cls, protocol, program, args, cwd=None, gpuId='0'):
+    def runRepic(cls, protocol, program, args, cwd=None):
         """ Run repic command from a given protocol. """
-        script = os.path.join(cls.getHome(), args)
-        fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.activatingRepic(), program)
-        protocol.runJob(fullProgram, script, env=cls.getEnviron(gpuId=gpuId), cwd=cwd, numberOfMpi=1)
+
+        mycmd = f'{cls.getActivationCmd()} && '
+        cmd = os.path.join(os.path.join(cls.getHome('REPIC'), 'repic/commands', program))
+        mycmd += PYTHON + ' ' + cmd
+
+        protocol.runJob(mycmd, args, env=cls.getEnviron(), cwd=cwd)
