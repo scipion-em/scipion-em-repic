@@ -117,32 +117,27 @@ class ProtRepic(ProtParticlePicking):
         Plugin.runRepic(self, 'run_ilp.py', args)
 
     def createOutputStep(self):
-        #inputcoords = self.inputCoordinates.get()
-        print(self.inputCoordinates.get())
 
-        self.outputSet = SetOfCoordinates()
+        self.outputSet = SetOfCoordinates(filename="coordinates.sqlite")
+        self.outputSet.setBoxSize(self.boxsize.get())
+        self.outputSet.clear()
+        mics = self.getAllCoordsInputMicrographs()
 
-        micNumber = 0
-        Xcoords = []
-        Ycoords = []
-        miccoords = []
-        for mic in self.micList:
-            fn = os.path.join(self._getExtraPath('output'), mic+'.box')
-            f = open(fn, "r")
-            lines = f.readlines()
-            for line in lines:
-                Xcoords.append(int(line[0]))
-                Ycoords.append(int(line[1]))
-                miccoords.append(micNumber)
-
-            micNumber = micNumber + 1
-
-        coord = Coordinate()
-        for idx in range(0, len(Xcoords)):
-            coord.setMicrograph(self.micList[micNumber[idx]])
-            coord.setX(Xcoords[idx])
-            coord.setY(Ycoords[idx])
-            self.outputSet.append(coord)
+        for micFn in mics:
+            coord = Coordinate()
+            coordsInMic, mic = [], mics[micFn]
+            dirName = self._getExtraPath('output')
+            fn = os.path.join(dirName, micFn + '.box')
+            if os.path.getsize(fn) > 0:
+                with open(fn, 'r') as f:
+                    lines = f.readlines()
+                    for line in lines:
+                        coord.setMicrograph(mic)
+                        coord.setX(int(line[0]))
+                        coord.setY(int(line[1]))
+                        coord.setObjId(None)
+                        self.outputSet.append(coord)
+                    f.close()
 
         self._defineOutputs(outputCoordinates=self.outputSet)
         for inset in self.inputCoordinates:
@@ -172,8 +167,10 @@ class ProtRepic(ProtParticlePicking):
           micFns = micFns & set(newMicFns)
 
       sharedMicDict = {}
+
       for micFn in micFns:
         sharedMicDict[micFn] = micDict[micFn]
+
 
       return sharedMicDict
 
