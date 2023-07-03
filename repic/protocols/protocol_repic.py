@@ -42,7 +42,10 @@ from repic import Plugin
 
 class ProtRepic(ProtParticlePicking):
     """
-    This protocol....
+    This protocols performs a consensus picking. Given several sets of coordinates picked with different
+    algorithms, Repic will find a reliable consensus set of coordinates. Usually, it works in an iterative
+    manner. The consensus set is used to train the pickers again, and repic is used to find a greater
+    consensus set. Thus iteratively, this process converges to the true set of particles.
     """
     _label = 'repic picking'
     micList = []
