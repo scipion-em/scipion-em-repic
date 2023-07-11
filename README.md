@@ -16,6 +16,7 @@ Using the command line:
 
     scipion3 installp -p yourpathtoinstall/scipion-em-repic --devel
 
-Reference:
+Reference
+------------
 
 See the preprint in: [https://www.biorxiv.org/content/10.1101/2023.05.13.540636v1]
