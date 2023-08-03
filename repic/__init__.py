@@ -33,7 +33,7 @@ from scipion.constants import PYTHON
 
 from .constants import *
 
-__version__ = '0'
+__version__ = '3.0.0'
 _logo = "icon.png"
 _references = ['cameron2023']
 
@@ -77,7 +77,6 @@ class Plugin(pwem.Plugin):
         installationCmd += 'conda create -n %s -c bioconda python=3.8 networkx matplotlib scipy -y && ' % REPIC_ENV_NAME
 
         # Activate new the environment
-        installationCmd += 'conda activate %s && ' % REPIC
         installationCmd += 'chmod -R + %s && ' % cls.getHome()
 
         installationCmd += 'touch %s' % REPIC_INSTALLED

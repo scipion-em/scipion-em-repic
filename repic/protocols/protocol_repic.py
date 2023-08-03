@@ -42,14 +42,16 @@ from repic import Plugin
 
 class ProtRepic(ProtParticlePicking):
     """
-    This protocols performs a consensus picking. Given several sets of coordinates picked with different
+    This protocol performs a consensus picking. Given several sets of coordinates picked with different
     algorithms, Repic will find a reliable consensus set of coordinates. Usually, it works in an iterative
     manner. The consensus set is used to train the pickers again, and repic is used to find a greater
-    consensus set. Thus iteratively, this process converges to the true set of particles.
+    consensus set, thus iteratively, this process converges to the true set of particles.
     """
-    _label = 'repic picking'
+    _label = 'oneshot picking consensus'
     micList = []
     pickedParticles = 0
+    OUTPUT_NAME = "Coordinates2D"
+    _possibleOutputs = {OUTPUT_NAME: SetOfCoordinates}
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -121,9 +123,11 @@ class ProtRepic(ProtParticlePicking):
 
     def createOutputStep(self):
 
-        self.outputSet = SetOfCoordinates(filename="coordinates.sqlite")
-        self.outputSet.setBoxSize(self.boxsize.get())
-        self.outputSet.clear()
+        outputSet = SetOfCoordinates.create(outputPath=self.getPath(), prefix="coordinates.sqlite")
+        # Copy info from the first coordinates set
+        firstInputSet = self.inputCoordinates[0].get()
+        outputSet.setBoxSize(self.boxsize.get())
+        outputSet.setMicrographs(firstInputSet._micrographsPointer)
         mics = self.getAllCoordsInputMicrographs()
 
         for micFn in mics:
@@ -136,18 +140,14 @@ class ProtRepic(ProtParticlePicking):
                     lines = f.readlines()
                     for line in lines:
                         coord.setMicrograph(mic)
+                        coord.setObjId(None)
                         coord.setX(int(line[0]))
                         coord.setY(int(line[1]))
-                        coord.setObjId(None)
-                        self.outputSet.append(coord)
-                    f.close()
+                        outputSet.append(coord)
 
-        self._defineOutputs(outputCoordinates=self.outputSet)
+        self._defineOutputs(**{self.OUTPUT_NAME:outputSet})
         for inset in self.inputCoordinates:
-            self._defineSourceRelation(inset.get(), self.outputSet)
-
-
-
+            self._defineSourceRelation(inset.get(), outputSet)
 
 
     def getAllCoordsInputMicrographs(self):
