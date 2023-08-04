@@ -114,12 +114,12 @@ class ProtRepic(ProtParticlePicking):
         os.mkdir(outCoords)
         boxsize = self.boxsize.get()
         args = ' %s %s %i ' % (self._getExtraPath(), outCoords, boxsize)
-        Plugin.runRepic(self, 'get_cliques.py', args)
+        Plugin.runRepic(self, 'get_cliques', args)
 
     def getOptimalClicquesStep(self):
         outputOfCliques = self._getExtraPath('output')
         args = ' --num_particles %i %s %i' % (self.numParticles.get(), outputOfCliques, self.boxsize.get())
-        Plugin.runRepic(self, 'run_ilp.py', args)
+        Plugin.runRepic(self, 'run_ilp', args)
 
     def createOutputStep(self):
 
