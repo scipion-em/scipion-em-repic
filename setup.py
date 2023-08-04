@@ -10,6 +10,7 @@ from setuptools import setup, find_packages
 # To use a consistent encoding
 from codecs import open
 from os import path
+from repic import __version__
 
 here = path.abspath(path.dirname(__file__))
 
@@ -25,17 +26,17 @@ with open('requirements.txt') as f:
 
 setup(
     name='scipion-em-repic',  # Required
-    version='0.1',  # Required
-    description='Scipion plugin repic.',  # Required
+    version=__version__,  # Required
+    description='Scipion plugin for REPIC.',  # Required
     long_description=long_description,  # Optional
     url='https://github.com/scipion-em/scipion-em-repic',  # Optional
-    author='you',  # Optional
-    author_email='you@yourinstitution.email',  # Optional
+    author='Jose Luis Vilas',  # Optional
+    author_email='scipion@cnb.csic.es',  # Optional
     keywords='cryoem particle picking',  # Optional
     packages=find_packages(),
     install_requires=[requirements],
     entry_points={'pyworkflow.plugin': 'repic = repic'},
     package_data={  # Optional
-       'myplugin': ['icon.png', 'protocols.conf'],
+       'repic': ['icon.png', 'protocols.conf'],
     }
 )
