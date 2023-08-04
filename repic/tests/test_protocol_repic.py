@@ -79,14 +79,13 @@ class TestRepic(BaseTest):
         prot = cls.newProtocol(ProtRepic,
                                inputCoordinates=inpCoords,
                                boxsize=150,
-                               numParticles=100)
+                               numParticles=550)
 
         prot.setObjLabel('Repic picking')
         cls.launchProtocol(prot)
         return prot
 
     def test_RepicConsensus(self):
-        self.assertIsNotNone(self.protRepic.outputCoordinates,
-                             "There was a problem with the consensus")
+        self.assertSetSize(getattr(self.protRepic, self.protRepic.OUTPUT_NAME), size=2077, msg="There was a problem with REPIC consensus")
 
 
