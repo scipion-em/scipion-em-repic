@@ -38,19 +38,20 @@ from pyworkflow.utils import Message
 from pwem.objects import SetOfCoordinates, Coordinate
 from pyworkflow.utils import getFiles, removeBaseExt, moveFile
 from repic import Plugin
+import tomo.constants as const
 
 
-class ProtRepic(ProtParticlePicking):
+class ProtRepicTomo(ProtParticlePicking):
     """
     This protocol performs a consensus picking. Given several sets of coordinates picked with different
     algorithms, Repic will find a reliable consensus set of coordinates. Usually, it works in an iterative
     manner. The consensus set is used to train the pickers again, and repic is used to find a greater
     consensus set, thus iteratively, this process converges to the true set of particles.
     """
-    _label = 'oneshot picking consensus'
+    _label = 'oneshot tomo picking consensus'
     micList = []
     pickedParticles = 0
-    OUTPUT_NAME = "Coordinates2D"
+    OUTPUT_NAME = "Coordinates3D"
     _possibleOutputs = {OUTPUT_NAME: SetOfCoordinates}
 
     # -------------------------- DEFINE param functions ----------------------
@@ -62,7 +63,7 @@ class ProtRepic(ProtParticlePicking):
         # You need a params to belong to a section:
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam('inputCoordinates', params.MultiPointerParam,
-                      pointerClass='SetOfCoordinates',
+                      pointerClass='SetOfCoordinates3D',
                       label="Input coordinates", important=True,
                       help='Select the set of coordinates to compare')
 
@@ -102,7 +103,11 @@ class ProtRepic(ProtParticlePicking):
                 fn = os.path.join(dirName, micFn + '.box')
                 with open(fn, 'w') as f:
                     for coord in coordSet.get().iterCoordinates(mic):
-                        line = '%i %i %i %i 1 ' % (coord.getX(), coord.getY(), self.boxsize.get(), self.boxsize.get())
+                        line = '%i %i %i %i %i %i 1 ' % (coord.getX(const.BOTTOM_LEFT_CORNER),
+                                                         coord.getY(const.BOTTOM_LEFT_CORNER),
+                                                         coord.getZ(const.BOTTOM_LEFT_CORNER),
+                                                         self.boxsize.get(),
+                                                         self.boxsize.get(), self.boxsize.get())
                         f.write(line + '\n')
 
                         coordsInMic.append(coord)
@@ -110,7 +115,7 @@ class ProtRepic(ProtParticlePicking):
                     pickerNum = pickerNum + 1
 
     def getClicquesStep(self):
-        outCoords = self._getExtraPath('repicOutput')
+        outCoords = self._getExtraPath('output')
         os.mkdir(outCoords)
         boxsize = self.boxsize.get()
         args = ' %s %s %i ' % (self._getExtraPath(), outCoords, boxsize)
@@ -133,7 +138,7 @@ class ProtRepic(ProtParticlePicking):
         for micFn in mics:
             coord = Coordinate()
             coordsInMic, mic = [], mics[micFn]
-            dirName = self._getExtraPath('output')
+            dirName = self._getExtraPath('repicOutput')
             fn = os.path.join(dirName, micFn + '.box')
             if os.path.getsize(fn) > 0:
                 with open(fn, 'r') as f:
@@ -157,25 +162,24 @@ class ProtRepic(ProtParticlePicking):
       Do not create a set, because of concurrency in the database'''
       micDict, micFns = {}, set([])
       for inputCoord in self.inputCoordinates:
-        newMics = inputCoord.get().getMicrographs()
-        newMicFns = []
-        for mic in newMics:
-          micFn = self.prunePaths([mic.getFileName()])[0]
-          micDict[micFn] = mic.clone()
-          newMicFns.append(micFn)
+        newTomos = inputCoord.get().getPrecedents()
+        newTomosFns = []
+        for tomo in newTomos:
+          micFn = self.prunePaths([tomo.getFileName()])[0]
+          micDict[micFn] = tomo.clone()
+          newTomosFns.append(micFn)
 
         if micFns == set([]):
-          micFns = micFns | set(newMicFns)
+          micFns = micFns | set(newTomosFns)
         else:
-          micFns = micFns & set(newMicFns)
+          micFns = micFns & set(newTomosFns)
 
-      sharedMicDict = {}
+      sharedTomoDict = {}
 
       for micFn in micFns:
-        sharedMicDict[micFn] = micDict[micFn]
+        sharedTomoDict[micFn] = micDict[micFn]
 
-
-      return sharedMicDict
+      return sharedTomoDict
 
     def prunePaths(self, paths):
       fns = []

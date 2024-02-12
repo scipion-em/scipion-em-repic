@@ -73,8 +73,8 @@ class Plugin(pwem.Plugin):
         installationCmd = cls.getCondaActivationCmd()
 
         # Create the environment
-        installationCmd += ' git clone https://github.com/ccameron/REPIC && '
-        installationCmd += 'conda create -n %s -c bioconda python=3.8 networkx matplotlib scipy -y && ' % REPIC_ENV_NAME
+        installationCmd += ' git clone -b tomo https://github.com/ccameron/REPIC && '
+        installationCmd += 'conda create -n %s -c conda-forge python=3.8 networkx matplotlib scipy -y && ' % REPIC_ENV_NAME
 
         # Activate new the environment
         installationCmd += 'chmod -R + %s && ' % cls.getHome()

@@ -24,3 +24,4 @@
 # *
 # **************************************************************************
 from .protocol_repic import ProtRepic
+from .protocol_repic_tomo import ProtRepicTomo
