@@ -148,6 +148,7 @@ class ProtRepicTomo(ProtParticlePicking):
                         coord.setObjId(None)
                         coord.setX(int(line[0]))
                         coord.setY(int(line[1]))
+                        coord.setZ(int(line[2]))
                         outputSet.append(coord)
 
         self._defineOutputs(**{self.OUTPUT_NAME:outputSet})
