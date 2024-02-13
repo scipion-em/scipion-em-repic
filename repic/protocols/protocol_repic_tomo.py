@@ -35,7 +35,8 @@ import os
 from pyworkflow.protocol import Protocol, params, Integer
 from pwem.protocols import ProtParticlePicking
 from pyworkflow.utils import Message
-from pwem.objects import SetOfCoordinates, Coordinate
+from tomo.objects import SetOfCoordinates3D, Coordinate3D
+import pyworkflow.utils.path as path
 from pyworkflow.utils import getFiles, removeBaseExt, moveFile
 from repic import Plugin
 import tomo.constants as const
@@ -51,8 +52,8 @@ class ProtRepicTomo(ProtParticlePicking):
     _label = 'oneshot tomo picking consensus'
     micList = []
     pickedParticles = 0
-    OUTPUT_NAME = "Coordinates3D"
-    _possibleOutputs = {OUTPUT_NAME: SetOfCoordinates}
+    OUTPUT_NAME = "outputSetOfCoordinates3D"
+    #_possibleOutputs = {outputSetOfCoordinates3D: SetOfCoordinates3D}
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -76,7 +77,6 @@ class ProtRepicTomo(ProtParticlePicking):
                       label="Expected number of particles per micrograph",
                       help='Expected number of particles per micrograph')
 
-
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         self.checkedMics = set()  # those mics ready to be processed (micId)
@@ -90,7 +90,7 @@ class ProtRepicTomo(ProtParticlePicking):
         self._insertFunctionStep(self.createOutputStep)
 
     def convertInputStep(self):
-        mics = self.getAllCoordsInputMicrographs()
+        mics = self.getAllCoordsInputTomograms()
         for micFn in mics:
             coordsInMic, mic = [], mics[micFn]
             self.micList.append(micFn)
@@ -98,8 +98,7 @@ class ProtRepicTomo(ProtParticlePicking):
             for coordSet in self.inputCoordinates:
                 folderName = 'picker_%i' % pickerNum
                 dirName = self._getExtraPath(folderName)
-                if not os.path.exists(dirName):
-                    os.mkdir(dirName)
+                path.makePath(dirName)
                 fn = os.path.join(dirName, micFn + '.box')
                 with open(fn, 'w') as f:
                     for coord in coordSet.get().iterCoordinates(mic):
@@ -115,28 +114,32 @@ class ProtRepicTomo(ProtParticlePicking):
                     pickerNum = pickerNum + 1
 
     def getClicquesStep(self):
-        outCoords = self._getExtraPath('output')
+        outCoords = self._getExtraPath('repicOutput')
         os.mkdir(outCoords)
         boxsize = self.boxsize.get()
         args = ' %s %s %i ' % (self._getExtraPath(), outCoords, boxsize)
         Plugin.runRepic(self, 'get_cliques.py', args)
 
     def getOptimalClicquesStep(self):
-        outputOfCliques = self._getExtraPath('output')
+        outputOfCliques = self._getExtraPath('repicOutput')
         args = ' --num_particles %i %s %i' % (self.numParticles.get(), outputOfCliques, self.boxsize.get())
         Plugin.runRepic(self, 'run_ilp.py', args)
 
     def createOutputStep(self):
 
-        outputSet = SetOfCoordinates.create(outputPath=self.getPath(), prefix="coordinates.sqlite")
+        outputSet = SetOfCoordinates3D.create(outputPath=self.getPath(), prefix="coordinates.sqlite")
         # Copy info from the first coordinates set
-        firstInputSet = self.inputCoordinates[0].get()
+        tomos = self.inputCoordinates[0].get().getPrecedents()
+        sampling = self.inputCoordinates[0].get().getSamplingRate()
+        print(tomos)
         outputSet.setBoxSize(self.boxsize.get())
-        outputSet.setMicrographs(firstInputSet._micrographsPointer)
-        mics = self.getAllCoordsInputMicrographs()
+        print(self.boxsize.get())
+        outputSet.setPrecedents(tomos)
+        outputSet.setSamplingRate(sampling)
+        mics = self.getAllCoordsInputTomograms()
 
         for micFn in mics:
-            coord = Coordinate()
+            coord = Coordinate3D()
             coordsInMic, mic = [], mics[micFn]
             dirName = self._getExtraPath('repicOutput')
             fn = os.path.join(dirName, micFn + '.box')
@@ -144,49 +147,60 @@ class ProtRepicTomo(ProtParticlePicking):
                 with open(fn, 'r') as f:
                     lines = f.readlines()
                     for line in lines:
-                        coord.setMicrograph(mic)
                         coord.setObjId(None)
-                        coord.setX(int(line[0]))
-                        coord.setY(int(line[1]))
-                        coord.setZ(int(line[2]))
+                        line = line.split()
+                        print(line)
+                        print('--------------------')
+                        coord.setX(int(line[0]), const.SCIPION)
+                        coord.setY(int(line[1]), const.SCIPION)
+                        coord.setZ(int(line[2]), const.SCIPION)
                         outputSet.append(coord)
+                        outputSet.update(coord)
 
-        self._defineOutputs(**{self.OUTPUT_NAME:outputSet})
-        for inset in self.inputCoordinates:
-            self._defineSourceRelation(inset.get(), outputSet)
+        outputSet.write()
 
+        #print( type(**{self.OUTPUT_NAME: outputSet}) )
 
-    def getAllCoordsInputMicrographs(self):
-      '''Returns a dic {micFn: mic} with the input micrographs present associated with all the input coordinates sets.
+        #self._defineOutputs(**{self.OUTPUT_NAME: outputSet})
+        self._defineOutputs(outputSetOfCoordinates3D=outputSet)
+
+        self._defineSourceRelation(self.inputCoordinates, outputSet)
+        self._store()
+
+        # for inset in self.inputCoordinates:
+        #    self._defineSourceRelation(inset.get(), outputSet)
+
+    def getAllCoordsInputTomograms(self):
+        '''Returns a dic {micFn: mic} with the input micrographs present associated with all the input coordinates sets.
       If shared, the list contains only those micrographs present in all input coordinates sets, else the list contains
       all microgrpah present in any set (Intersection vs Union)
       Do not create a set, because of concurrency in the database'''
-      micDict, micFns = {}, set([])
-      for inputCoord in self.inputCoordinates:
-        newTomos = inputCoord.get().getPrecedents()
-        newTomosFns = []
-        for tomo in newTomos:
-          micFn = self.prunePaths([tomo.getFileName()])[0]
-          micDict[micFn] = tomo.clone()
-          newTomosFns.append(micFn)
+        micDict, micFns = {}, set([])
+        for inputCoord in self.inputCoordinates:
+            newTomos = inputCoord.get().getPrecedents()
+            newTomosFns = []
+            for tomo in newTomos:
+                micFn = self.prunePaths([tomo.getFileName()])[0]
+                micDict[micFn] = tomo.clone()
+                newTomosFns.append(micFn)
 
-        if micFns == set([]):
-          micFns = micFns | set(newTomosFns)
-        else:
-          micFns = micFns & set(newTomosFns)
+            if micFns == set([]):
+                micFns = micFns | set(newTomosFns)
+            else:
+                micFns = micFns & set(newTomosFns)
 
-      sharedTomoDict = {}
+        sharedTomoDict = {}
 
-      for micFn in micFns:
-        sharedTomoDict[micFn] = micDict[micFn]
+        for micFn in micFns:
+            sharedTomoDict[micFn] = micDict[micFn]
 
-      return sharedTomoDict
+        return sharedTomoDict
 
     def prunePaths(self, paths):
-      fns = []
-      for path in paths:
-        fns.append(path.split('/')[-1])
-      return fns
+        fns = []
+        for path in paths:
+            fns.append(path.split('/')[-1])
+        return fns
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -207,6 +221,7 @@ class ProtRepicTomo(ProtParticlePicking):
                                " In total, %s messages has been printed."
                                % (self.previousCount, self.count))
         return methods
+
 
 '''
 class repicNumParticles(Wizard):
