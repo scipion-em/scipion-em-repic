@@ -131,9 +131,7 @@ class ProtRepicTomo(ProtParticlePicking):
         # Copy info from the first coordinates set
         tomos = self.inputCoordinates[0].get().getPrecedents()
         sampling = self.inputCoordinates[0].get().getSamplingRate()
-        print(tomos)
         outputSet.setBoxSize(self.boxsize.get())
-        print(self.boxsize.get())
         outputSet.setPrecedents(tomos)
         outputSet.setSamplingRate(sampling)
         mics = self.getAllCoordsInputTomograms()
@@ -154,6 +152,7 @@ class ProtRepicTomo(ProtParticlePicking):
                         coord.setX(int(line[0]), const.SCIPION)
                         coord.setY(int(line[1]), const.SCIPION)
                         coord.setZ(int(line[2]), const.SCIPION)
+                        coord.setVolId(micFn)
                         outputSet.append(coord)
                         outputSet.update(coord)
 
@@ -180,7 +179,8 @@ class ProtRepicTomo(ProtParticlePicking):
             newTomos = inputCoord.get().getPrecedents()
             newTomosFns = []
             for tomo in newTomos:
-                micFn = self.prunePaths([tomo.getFileName()])[0]
+                #micFn = self.prunePaths([tomo.getFileName()])[0]
+                micFn = tomo.getTsId()
                 micDict[micFn] = tomo.clone()
                 newTomosFns.append(micFn)
 
