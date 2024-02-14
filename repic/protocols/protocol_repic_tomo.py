@@ -147,20 +147,16 @@ class ProtRepicTomo(ProtParticlePicking):
                     for line in lines:
                         coord.setObjId(None)
                         line = line.split()
-                        print(line)
-                        print('--------------------')
+                        coord.setTomoId(micFn)
                         coord.setX(int(line[0]), const.BOTTOM_LEFT_CORNER)
                         coord.setY(int(line[1]), const.BOTTOM_LEFT_CORNER)
                         coord.setZ(int(line[2]), const.BOTTOM_LEFT_CORNER)
-                        coord.setTomoId(micFn)
+
                         outputSet.append(coord)
                         outputSet.update(coord)
 
         outputSet.write()
 
-        #print( type(**{self.OUTPUT_NAME: outputSet}) )
-
-        #self._defineOutputs(**{self.OUTPUT_NAME: outputSet})
         self._defineOutputs(outputSetOfCoordinates3D=outputSet)
 
         self._defineSourceRelation(self.inputCoordinates, outputSet)
