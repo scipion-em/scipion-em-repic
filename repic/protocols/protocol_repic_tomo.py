@@ -146,6 +146,12 @@ class ProtRepicTomo(ProtParticlePicking):
                     lines = f.readlines()
                     for line in lines:
                         coord.setObjId(None)
+
+                        for t in tomos.iterItems():
+                            tsId = t.getTsId()
+                            if tsId == micFn:
+                                coord.setVolume(t)
+                                break
                         line = line.split()
                         coord.setTomoId(micFn)
                         coord.setX(int(line[0]), const.BOTTOM_LEFT_CORNER)
