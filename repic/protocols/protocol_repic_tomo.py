@@ -152,7 +152,7 @@ class ProtRepicTomo(ProtParticlePicking):
                         coord.setX(int(line[0]), const.SCIPION)
                         coord.setY(int(line[1]), const.SCIPION)
                         coord.setZ(int(line[2]), const.SCIPION)
-                        coord.setVolId(micFn)
+                        coord.setTomoId(micFn)
                         outputSet.append(coord)
                         outputSet.update(coord)
 
