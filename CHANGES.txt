@@ -1,2 +1,4 @@
 V3.0.0:
  - First release with REPIC one shot method (repic - oneshot picking consensus)
+ V3.1.0:
+ - Hot Fix: fix coordinates reading

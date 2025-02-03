@@ -67,7 +67,7 @@ class ProtRepic(ProtParticlePicking):
                       help='Select the set of coordinates to compare')
 
         form.addParam('boxsize', params.IntParam, default=100,
-                      label="Box size",
+                      label="Box size",  allowsPointers=True,
                       help='Particle box size')
 
         form.addParam('numParticles', params.IntParam, default=150,
@@ -139,6 +139,8 @@ class ProtRepic(ProtParticlePicking):
                 with open(fn, 'r') as f:
                     lines = f.readlines()
                     for line in lines:
+                        line = line.strip().split()
+                        print(line[0], line[1])
                         coord.setMicrograph(mic)
                         coord.setObjId(None)
                         coord.setX(int(line[0]))
