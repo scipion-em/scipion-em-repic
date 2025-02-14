@@ -27,26 +27,20 @@
 import os
 
 import pwem
-from pyworkflow import Config
 from pyworkflow.utils import Environ
-from scipion.constants import PYTHON
+from repic.constants import *
 
-from .constants import *
-
-__version__ = '3.0.0'
+__version__ = '3.0.1'
 _logo = "icon.png"
 _references = ['cameron2023']
 
 
 class Plugin(pwem.Plugin):
-    _homeVar = REPIC_HOME
-    _pathVars = [REPIC_HOME]
     _url = 'https://github.com/scipion-em/scipion-em-repic'
 
     @classmethod
     def _defineVariables(cls):
         # repic does NOT need EmVar because it uses a conda environment.
-        cls._defineEmVar(REPIC_HOME, 'repic-0')
         cls._defineVar(REPIC_ENV_ACTIVATION, DEFAULT_ACTIVATION_CMD)
 
 
@@ -67,17 +61,15 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
-        REPIC_INSTALLED = '%s_%s_installed' % (REPIC, VERSION)
+        REPIC_INSTALLED = '%s-installed' % REPIC_ENV_NAME
 
         # try to get CONDA activation command
         installationCmd = cls.getCondaActivationCmd()
 
         # Create the environment
-        installationCmd += ' git clone https://github.com/ccameron/REPIC && '
-        installationCmd += 'conda create -n %s -c bioconda python=3.8 networkx matplotlib scipy -y && ' % REPIC_ENV_NAME
-
-        # Activate new the environment
-        installationCmd += 'chmod -R + %s && ' % cls.getHome()
+        installationCmd += 'conda create -n %s python=3.9 -y && ' % REPIC_ENV_NAME
+        installationCmd += 'conda activate %s && ' % REPIC_ENV_NAME
+        installationCmd += 'pip install git+https://github.com/ccameron/REPIC.git@v%s && ' % VERSION
 
         installationCmd += 'touch %s' % REPIC_INSTALLED
 
@@ -115,7 +107,6 @@ class Plugin(pwem.Plugin):
         """ Run repic command from a given protocol. """
 
         mycmd = f'{cls.getActivationCmd()} && '
-        cmd = os.path.join(os.path.join(cls.getHome('REPIC'), 'repic/commands', program))
-        mycmd += PYTHON + ' ' + cmd
+        mycmd += 'repic %s '% program
 
         protocol.runJob(mycmd, args, env=cls.getEnviron(), cwd=cwd)
