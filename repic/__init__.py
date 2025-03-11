@@ -30,7 +30,7 @@ import pwem
 from pyworkflow.utils import Environ
 from repic.constants import *
 
-__version__ = '3.0.1'
+__version__ = '3.2.0'
 _logo = "icon.png"
 _references = ['cameron2023']
 
