@@ -46,6 +46,159 @@ class ProtRepic(ProtParticlePicking):
     algorithms, Repic will find a reliable consensus set of coordinates. Usually, it works in an iterative
     manner. The consensus set is used to train the pickers again, and repic is used to find a greater
     consensus set, thus iteratively, this process converges to the true set of particles.
+
+    AI Generated:
+
+    Consensus Particle Picking (ProtRepic) - User Manual
+        Overview
+
+        The Consensus Particle Picking protocol combines multiple
+        particle coordinate predictions obtained from different
+        particle picking strategies into a single, more reliable set
+        of particle locations. Its primary objective is to reduce the
+        number of false positives and improve the robustness of
+        particle selection by identifying coordinates consistently
+        detected across several independent picking approaches.
+
+        In cryo-EM workflows, particle picking is one of the most
+        influential preprocessing stages because the quality of the
+        selected particles directly affects all downstream analyses,
+        including two-dimensional classification, three-dimensional
+        reconstruction, heterogeneity analysis, and atomic modeling.
+        Different picking algorithms often produce partially
+        overlapping results, with each method introducing its own
+        biases, strengths, and weaknesses. This protocol addresses
+        that variability by generating a consensus solution that
+        favors reproducible particle detections.
+
+        Biological Motivation and Practical Context
+
+        In practical biological studies, users frequently apply
+        several picking methods to the same dataset, especially when
+        dealing with noisy micrographs, low contrast particles,
+        preferred orientations, contaminants, or structurally flexible
+        specimens. Consensus picking becomes particularly valuable in
+        these situations because coordinates independently detected by
+        multiple algorithms are generally more likely to correspond to
+        true particles.
+
+        The protocol is designed to support iterative cryo-EM
+        refinement strategies. In many workflows, the consensus set is
+        subsequently used to retrain neural-network or template-based
+        pickers, producing progressively cleaner and more complete
+        particle selections over multiple rounds. This iterative
+        refinement process often improves both precision and recall,
+        especially for challenging datasets.
+
+        Inputs and Data Consistency
+
+        The protocol requires several coordinate sets generated from
+        the same collection of micrographs. All input coordinate sets
+        should correspond to the same biological sample and imaging
+        conditions. Consistency in micrograph dimensions, particle
+        size, and coordinate conventions is essential for obtaining
+        meaningful consensus results.
+
+        Only micrographs shared among the provided coordinate sets are
+        considered during the consensus process. This ensures that the
+        comparison remains biologically and geometrically consistent
+        across all input pickers.
+
+        The particle box size is another important parameter because
+        it defines the expected particle dimensions during consensus
+        evaluation. Choosing a box size close to the true molecular
+        size generally improves the quality of the resulting particle
+        coordinates.
+
+        Consensus Detection Strategy
+
+        The protocol identifies groups of nearby coordinates that are
+        repeatedly detected across multiple picking methods. From a
+        biological perspective, these shared detections are treated as
+        more trustworthy candidates because they reflect agreement
+        between independent picking strategies rather than isolated
+        predictions from a single algorithm.
+
+        This consensus-based approach is especially useful for
+        datasets containing substantial ice contamination, carbon
+        edges, aggregation artifacts, or non-particle features that
+        individual pickers may incorrectly identify as valid
+        particles.
+
+        The protocol also includes optimization procedures that help
+        estimate the most biologically plausible consensus solution
+        according to the expected particle distribution within each
+        micrograph.
+
+        Expected Number of Particles
+
+        An optional estimate of the expected number of particles per
+        micrograph can guide the consensus selection process. This
+        parameter becomes particularly important in datasets with high
+        contamination levels or highly variable picking behavior.
+
+        Providing a realistic estimate improves stability and helps
+        avoid excessive inclusion of false positives. However,
+        biologically heterogeneous samples or datasets with large
+        variations in particle concentration may require careful
+        adjustment of this parameter.
+
+        In exploratory analyses, approximate estimates are usually
+        sufficient, while highly curated datasets may benefit from
+        more precise tuning.
+
+        Outputs and Their Interpretation
+
+        The protocol produces a new consensus coordinate set that can
+        be directly used for particle extraction and downstream cryo-EM
+        processing. The resulting coordinates represent particles that
+        achieved sufficient agreement across the input picking
+        methods.
+
+        Biologically, the consensus output often provides a better
+        balance between sensitivity and specificity than individual
+        pickers alone. This generally improves the quality of
+        subsequent classification and reconstruction steps by reducing
+        the proportion of spurious particles entering the workflow.
+
+        Nevertheless, no automatic picking strategy is completely free
+        from errors. Visual inspection of representative micrographs
+        and extracted particles remains strongly recommended,
+        especially for difficult datasets involving flexible
+        assemblies, filamentous structures, membrane proteins, or low
+        signal-to-noise conditions.
+
+        Practical Recommendations
+
+        In routine cryo-EM workflows, it is often beneficial to
+        combine pickers based on different underlying principles, such
+        as template matching, neural-network prediction, and reference-
+        free detection methods. Greater methodological diversity among
+        the input pickers often leads to a stronger and more reliable
+        consensus.
+
+        Users should also ensure that all coordinate sets are
+        generated using approximately compatible box sizes and similar
+        preprocessing conditions. Large discrepancies between input
+        pickers may reduce the quality of the final consensus.
+
+        After generating the consensus coordinates, it is advisable to
+        inspect particle distributions visually and validate the
+        results through downstream two-dimensional classification.
+        High-quality consensus picking typically produces cleaner
+        class averages and more stable reconstructions.
+
+        Final Perspective
+
+        Consensus particle picking represents a biologically practical
+        strategy for improving the reliability of cryo-EM particle
+        selection. By integrating information from multiple detection
+        methods, the protocol helps reduce picker-specific biases and
+        generates particle sets that are generally more robust for
+        downstream structural analysis. In modern cryo-EM workflows,
+        this approach is especially valuable for challenging datasets
+        where no single picking method consistently performs well
+        across all micrographs.
     """
     _label = 'oneshot picking consensus'
     micList = []
