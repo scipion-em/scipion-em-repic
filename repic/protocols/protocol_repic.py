@@ -97,6 +97,7 @@ class ProtRepic(ProtParticlePicking):
                 if not os.path.exists(dirName):
                     os.mkdir(dirName)
                 fn = os.path.join(dirName, micFn + '.box')
+
                 with open(fn, 'w') as f:
                     for coord in coordSet.get().iterCoordinates(mic):
                         line = '%i %i %i %i 1 ' % (coord.getX(), coord.getY(), self.boxsize.get(), self.boxsize.get())
@@ -132,7 +133,16 @@ class ProtRepic(ProtParticlePicking):
             coord = Coordinate()
             coordsInMic, mic = [], mics[micFn]
             dirName = self._getExtraPath('output')
-            fn = os.path.join(dirName, micFn + '.box')
+            fn = self.getMicBoxFile(dirName, micFn)
+
+            if not os.path.exists(fn):
+                # A micrograph REPIC produced nothing for has no file at
+                # all. That is an empty result, not a reason to lose
+                # every other micrograph's particles.
+                self.info("No REPIC output for %s; no particles from it."
+                          % micFn)
+                continue
+
             if os.path.getsize(fn) > 0:
                 with open(fn, 'r') as f:
                     lines = f.readlines()
@@ -166,7 +176,7 @@ class ProtRepic(ProtParticlePicking):
         newMics = inputCoord.get().getMicrographs()
         newMicFns = []
         for mic in newMics:
-          micFn = self.prunePaths([mic.getFileName()])[0]
+          micFn = self.getMicKey(mic)
           micDict[micFn] = mic.clone()
           newMicFns.append(micFn)
 
@@ -182,6 +192,44 @@ class ProtRepic(ProtParticlePicking):
 
 
       return sharedMicDict
+
+    def getMicBoxFile(self, dirName, micKey):
+      """Box file of one micrograph, under the name it was written with.
+
+      A run started before the keys carried the micrograph id wrote the
+      plain file name, and those box files are its results: when only
+      that one is on disk it is still the one read, so continuing such a
+      run keeps working.
+      """
+      scoped = os.path.join(dirName, micKey + '.box')
+
+      if not os.path.exists(scoped):
+        legacy = os.path.join(dirName, self.stripMicKeyScope(micKey) + '.box')
+
+        if os.path.exists(legacy):
+          return legacy
+
+      return scoped
+
+    @staticmethod
+    def stripMicKeyScope(micKey):
+      """The plain file name a key was built from."""
+      prefix, sep, rest = micKey.partition('__')
+
+      return rest if sep and prefix.isdigit() else micKey
+
+    def getMicKey(self, mic):
+      """The name this micrograph is known by, and that names its files.
+
+      A Set can hold two micrographs whose files differ only in their
+      directory. Keyed on the file name alone one of them is simply
+      dropped from the dictionary - never picked, with the other's
+      coordinates written into what should have been its box file. The
+      id keeps them apart; the file name stays in the key so the box
+      files remain readable.
+      """
+      return '%06d__%s' % (mic.getObjId(),
+                           self.prunePaths([mic.getFileName()])[0])
 
     def prunePaths(self, paths):
       fns = []

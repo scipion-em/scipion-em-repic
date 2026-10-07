@@ -94,6 +94,9 @@ class _OutputHarness(ProtRepic):
     def isFinished(self):
         return True
 
+    def info(self, message):
+        pass
+
 
 class TestRepicParticleCount(unittest.TestCase):
     def testSummaryReportsTheParticlesActuallyWritten(self):
@@ -181,3 +184,193 @@ class TestRepicHasNoSharedMutableState(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+SAME_BASENAME_A = '/data/sessionA/mic001.mrc'
+SAME_BASENAME_B = '/data/sessionB/mic001.mrc'
+
+
+class _MicSet:
+    def __init__(self, mics):
+        self._mics = list(mics)
+
+    def __iter__(self):
+        return iter(self._mics)
+
+
+class _CoordSetWithMics:
+    def __init__(self, mics):
+        self._mics = _MicSet(mics)
+
+    def get(self):
+        return self
+
+    def getMicrographs(self):
+        return self._mics
+
+
+class _MicrographsHarness(ProtRepic):
+    def __init__(self, coordInputs):
+        self.inputCoordinates = coordInputs
+
+
+class TestRepicKeepsTwoMicrographsApart(unittest.TestCase):
+    """The input micrographs are collected into a dict keyed by the
+    name of their file.
+
+    A Set can hold /data/sessionA/mic001.mrc and /data/sessionB/mic001.mrc
+    at once: different micrographs, one basename. Keyed on that alone one
+    of them simply disappears, and the box file written for it is the
+    other's.
+    """
+
+    def _harness(self):
+        mics = [_Mic(SAME_BASENAME_A, objId=1),
+                _Mic(SAME_BASENAME_B, objId=2)]
+
+        return _MicrographsHarness([_CoordSetWithMics(mics)])
+
+    def testBothMicrographsSurviveTheCollection(self):
+        harness = self._harness()
+
+        mics = harness.getAllCoordsInputMicrographs()
+
+        self.assertEqual(
+            len(mics),
+            2,
+            "One micrograph was dropped: it is never picked, and its "
+            "box file holds the other micrograph's coordinates.",
+        )
+
+    def testEachKeyStillPointsAtItsOwnMicrograph(self):
+        harness = self._harness()
+
+        mics = harness.getAllCoordsInputMicrographs()
+
+        byId = {mic.getObjId(): key for key, mic in mics.items()}
+
+        self.assertEqual(
+            len(byId),
+            2,
+            "Two keys must not resolve to the same micrograph.",
+        )
+
+    def testTheKeyStaysRecognisable(self):
+        """It names the box files, so it has to stay readable."""
+        harness = self._harness()
+
+        for key in harness.getAllCoordsInputMicrographs():
+            self.assertIn('mic001', key)
+
+    def testMicrographsWithDistinctNamesAreUnaffected(self):
+        mics = [_Mic('/data/mic001.mrc', objId=1),
+                _Mic('/data/mic002.mrc', objId=2)]
+        harness = _MicrographsHarness([_CoordSetWithMics(mics)])
+
+        self.assertEqual(len(harness.getAllCoordsInputMicrographs()), 2)
+
+    def testTheIntersectionAcrossPickersStillWorks(self):
+        """With several pickers only the shared micrographs are kept."""
+        first = [_Mic('/data/mic001.mrc', objId=1),
+                 _Mic('/data/mic002.mrc', objId=2)]
+        second = [_Mic('/data/mic001.mrc', objId=1)]
+        harness = _MicrographsHarness(
+            [_CoordSetWithMics(first), _CoordSetWithMics(second)])
+
+        mics = harness.getAllCoordsInputMicrographs()
+
+        self.assertEqual(
+            [mic.getObjId() for mic in mics.values()],
+            [1],
+            "Only the micrograph both pickers saw may go through.",
+        )
+
+
+class TestRepicReadsBackWhatItWrote(unittest.TestCase):
+    """The box files are read back under the key they were written with,
+    and a run started before the keys carried the id wrote the plain
+    name."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.harness = _MicrographsHarness([])
+
+    def _write(self, name):
+        path = os.path.join(self.root, name + '.box')
+        with open(path, 'w') as handle:
+            handle.write('')
+        return path
+
+    def testTheScopedFileIsUsedWhenThisRunWroteIt(self):
+        scoped = self._write('000001__mic001.mrc')
+
+        self.assertEqual(
+            self.harness.getMicBoxFile(self.root, '000001__mic001.mrc'),
+            scoped,
+        )
+
+    def testAnOlderRunsBoxFileIsStillFound(self):
+        legacy = self._write('mic001.mrc')
+
+        self.assertEqual(
+            self.harness.getMicBoxFile(self.root, '000001__mic001.mrc'),
+            legacy,
+            "The box files an interrupted run already produced are its "
+            "results; continuing it must keep reading them.",
+        )
+
+    def testTheScopedFileWinsOverTheOlderOne(self):
+        self._write('mic001.mrc')
+        scoped = self._write('000001__mic001.mrc')
+
+        self.assertEqual(
+            self.harness.getMicBoxFile(self.root, '000001__mic001.mrc'),
+            scoped,
+        )
+
+    def testAKeyWithoutAScopeIsLeftAlone(self):
+        self.assertEqual(
+            ProtRepic.stripMicKeyScope('mic001.mrc'), 'mic001.mrc')
+
+    def testAnUnderscoreInTheNameIsNotMistakenForAScope(self):
+        self.assertEqual(
+            ProtRepic.stripMicKeyScope('my__movie.mrc'), 'my__movie.mrc')
+
+
+class TestRepicToleratesAMicrographWithoutOutput(unittest.TestCase):
+    """REPIC writes nothing at all for a micrograph it found no
+    consensus particles in."""
+
+    def testTheOtherMicrographsParticlesAreStillCollected(self):
+        with tempfile.TemporaryDirectory() as root:
+            outDir = os.path.join(root, 'extra', 'output')
+            os.makedirs(outDir)
+
+            mics = [_Mic('/data/mic_001.mrc', objId=1),
+                    _Mic('/data/mic_002.mrc', objId=2)]
+            protocol = _OutputHarness(root, mics)
+
+            # Only the second micrograph produced anything.
+            key = protocol.getMicKey(mics[1])
+            with open(os.path.join(outDir, key + '.box'), 'w') as fh:
+                fh.write("10 20 100 100 1\n")
+
+            created = _OutputCoords()
+
+            import repic.protocols.protocol_repic as module
+            original = module.SetOfCoordinates
+            module.SetOfCoordinates = type(
+                '_Factory', (), {'create': staticmethod(
+                    lambda outputPath, prefix: created)})
+
+            try:
+                ProtRepic.createOutputStep(protocol)
+            finally:
+                module.SetOfCoordinates = original
+
+            self.assertEqual(
+                [(10, 20)],
+                created.appended,
+                "A micrograph REPIC produced nothing for must not cost "
+                "every other micrograph its particles.",
+            )
