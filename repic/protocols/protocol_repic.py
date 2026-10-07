@@ -48,12 +48,14 @@ class ProtRepic(ProtParticlePicking):
     consensus set, thus iteratively, this process converges to the true set of particles.
     """
     _label = 'oneshot picking consensus'
-    micList = []
-    pickedParticles = 0
     OUTPUT_NAME = "Coordinates2D"
     _possibleOutputs = {OUTPUT_NAME: SetOfCoordinates}
 
     # -------------------------- DEFINE param functions ----------------------
+    def __init__(self, **kwargs):
+        ProtParticlePicking.__init__(self, **kwargs)
+        self.pickedParticles = Integer(0)
+
     def _defineParams(self, form):
         """ Define the input parameters that will be used.
         Params:
@@ -78,10 +80,6 @@ class ProtRepic(ProtParticlePicking):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        self.checkedMics = set()  # those mics ready to be processed (micId)
-        self.processedMics = set()  # those mics already processed (micId)
-        self.sampligRates = []
-
         # Insert processing steps
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.getClicquesStep)
@@ -92,7 +90,6 @@ class ProtRepic(ProtParticlePicking):
         mics = self.getAllCoordsInputMicrographs()
         for micFn in mics:
             coordsInMic, mic = [], mics[micFn]
-            self.micList.append(micFn)
             pickerNum = 0
             for coordSet in self.inputCoordinates:
                 folderName = 'picker_%i' % pickerNum
@@ -111,7 +108,7 @@ class ProtRepic(ProtParticlePicking):
 
     def getClicquesStep(self):
         outCoords = self._getExtraPath('output')
-        os.mkdir(outCoords)
+        os.makedirs(outCoords, exist_ok=True)
         boxsize = self.boxsize.get()
         args = ' %s %s %i ' % (self._getExtraPath(), outCoords, boxsize)
         Plugin.runRepic(self, 'get_cliques', args)
@@ -122,8 +119,9 @@ class ProtRepic(ProtParticlePicking):
         Plugin.runRepic(self, 'run_ilp', args)
 
     def createOutputStep(self):
-
-        outputSet = SetOfCoordinates.create(outputPath=self.getPath(), prefix="coordinates.sqlite")
+        pickedParticles = 0
+        outputSet = SetOfCoordinates.create(outputPath=self.getPath(),
+                                            prefix="coordinates")
         # Copy info from the first coordinates set
         firstInputSet = self.inputCoordinates[0].get()
         outputSet.setBoxSize(self.boxsize.get())
@@ -140,12 +138,18 @@ class ProtRepic(ProtParticlePicking):
                     lines = f.readlines()
                     for line in lines:
                         line = line.strip().split()
-                        print(line[0], line[1])
                         coord.setMicrograph(mic)
                         coord.setObjId(None)
                         coord.setX(int(line[0]))
                         coord.setY(int(line[1]))
                         outputSet.append(coord)
+                        pickedParticles += 1
+
+        # Keep the count on the protocol: _summary runs in a later process
+        # and used to read a class attribute nobody ever assigned, so it
+        # always reported zero particles.
+        self.pickedParticles.set(pickedParticles)
+        self._store(self.pickedParticles)
 
         self._defineOutputs(**{self.OUTPUT_NAME:outputSet})
         for inset in self.inputCoordinates:
@@ -191,7 +195,8 @@ class ProtRepic(ProtParticlePicking):
         summary = []
 
         if self.isFinished():
-            summary.append("REPIC protocol has found *%i* particles." % (self.pickedParticles))
+            summary.append("REPIC protocol has found *%i* particles."
+                           % self.pickedParticles.get(0))
         return summary
 
     def _methods(self):
