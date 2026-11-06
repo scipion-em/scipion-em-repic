@@ -4,3 +4,6 @@ V3.0.0:
  - Hot Fix: fix coordinates reading
 V3.2.0:
 - Update repic version from 0.2.0 to 1.0.0
+V3.2.1:
+- Fix shared state between runs and a wrong summary in the consensus protocol
+- Two micrographs no longer get the same set of coordinates
